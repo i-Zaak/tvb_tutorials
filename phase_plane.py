@@ -3,7 +3,7 @@ from ipywidgets import interact, FloatSlider, Dropdown, ToggleButton
 import numpy as np
 import matplotlib.pylab as plt
 import matplotlib.gridspec as gridspec
-
+from tvb.simulator.lab import integrators
 
 def phase_plane_interactive(model, integrator):
     
@@ -101,6 +101,16 @@ def phase_plane_interactive(model, integrator):
         
         
         if param_kwargs['trajectory']:
+            if isinstance(integrator, integrators.IntegratorStochastic):
+                if integrator.noise.ntau > 0.0:
+                    integrator.noise.configure_coloured(integrator.dt,
+                                                             (1, model.nvar, 1,
+                                                              model.number_of_modes))
+                else:
+                    integrator.noise.configure_white(integrator.dt,
+                                                          (1, model.nvar, 1,
+                                                           model.number_of_modes))
+            
             svx_ind = model.state_variables.index(svx)
             svy_ind = model.state_variables.index(svy)
 
@@ -142,7 +152,7 @@ def phase_plane_interactive(model, integrator):
             param_range = param_def.domain
             if param_range is None:
                 continue
-            param_value = getattr(model, param_name)[0]
+            param_value = getattr(model, param_name).item()
             param_kwargs[param_name] = FloatSlider(
                 min=param_range.lo, max=param_range.hi, value=param_value)
             
