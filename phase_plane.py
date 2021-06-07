@@ -1,13 +1,16 @@
 from tvb.basic.neotraits.api import HasTraits, Attr, NArray, List
-from ipywidgets import interact, FloatSlider, Dropdown
+from ipywidgets import interact, FloatSlider, Dropdown, ToggleButton
 import numpy as np
 import matplotlib.pylab as plt
+import matplotlib.gridspec as gridspec
 
 
 def phase_plane_interactive(model, integrator):
     
     
     NUMBEROFGRIDPOINTS = 42
+    TRAJ_STEPS = 4096
+
     
     def plot_phase_plane(**param_kwargs):
         # defaults, to be changed
@@ -23,7 +26,7 @@ def phase_plane_interactive(model, integrator):
             setattr(model, k, np.r_[v])
 
         # state vector
-        sv_mean = np.array([model.state_variable_range[key].mean() for key in model.state_variables])
+        sv_mean = np.array([param_kwargs[key] for key in model.state_variables])
         sv_mean = sv_mean.reshape((model.nvar, 1, 1))
         default_sv = sv_mean.repeat(model.number_of_modes, axis=2)
         no_coupling = np.zeros((model.nvar, 1, model.number_of_modes))
@@ -64,7 +67,13 @@ def phase_plane_interactive(model, integrator):
 
 
         # plot
-        fig, ax = plt.subplots()
+        f = plt.figure( figsize=(10,8+model.nvar))
+        gs0 = gridspec.GridSpec(2,1, figure=f, wspace=0.1, height_ratios=(8,model.nvar))
+        gs = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gs0[0], hspace=0.05)
+        
+        
+        # Top (unshared) axes
+        ax = f.add_subplot(gs[0])
         ax.set(
             xlabel = "State Variable " + svx,
             ylabel = "State Variable " + svy,
@@ -88,7 +97,41 @@ def phase_plane_interactive(model, integrator):
         nullcline_y = ax.contour(X, Y,
                                               V[:, :, mode],
                                               [0], colors="g")
-        plt.show()
+        
+        
+        
+        if param_kwargs['trajectory']:
+            svx_ind = model.state_variables.index(svx)
+            svy_ind = model.state_variables.index(svy)
+
+            #Calculate an example trajectory
+            state = default_sv.copy()
+            integrator.clamped_state_variable_indices = np.setdiff1d(
+                np.r_[:len(model.state_variables)], np.r_[svx_ind, svy_ind])
+            integrator.clamped_state_variable_values = default_sv[integrator.clamped_state_variable_indices]
+            scheme = integrator.scheme
+            traj = np.zeros((TRAJ_STEPS+1, model.nvar, 1,
+                                model.number_of_modes))
+            traj[0, :] = state
+            for step in range(TRAJ_STEPS):
+                state = scheme(state, model.dfun, no_coupling, 0.0, 0.0)
+                traj[step+1, :] = state
+
+            ax.scatter(default_sv[svx_ind], default_sv[svy_ind], s=42, c='g', marker='o', edgecolor=None)
+            ax.plot(traj[:, svx_ind, 0, mode],
+                            traj[:, svy_ind, 0, mode])
+
+            #Plot the selected state variable trajectories as a function of time
+            gs = gridspec.GridSpecFromSubplotSpec(model.nvar, 1, subplot_spec=gs0[1], hspace=0.1)
+            for i, svar in enumerate(model.state_variables):
+                ax = f.add_subplot(gs[i])
+                ax.plot(np.arange(TRAJ_STEPS+1) * integrator.dt, traj[:, i, 0, mode])
+                ax.set(ylabel=svar)
+                if i < model.nvar-1:
+                    ax.axes.xaxis.set_ticks([])
+                else:
+                    ax.set(xlabel="time (ms)")
+
         
     # setup widgets 
     param_kwargs = {}
@@ -102,6 +145,12 @@ def phase_plane_interactive(model, integrator):
             param_value = getattr(model, param_name)[0]
             param_kwargs[param_name] = FloatSlider(
                 min=param_range.lo, max=param_range.hi, value=param_value)
+            
+    for svar, svar_range in model.state_variable_range.items():
+        param_kwargs[svar] = FloatSlider(
+                min=svar_range[0], max=svar_range[1], value=svar_range.mean()
+        )
+    
     param_kwargs['svx'] = Dropdown(
         #options=[(v,i) for i, v in enumerate(model.state_variables)],
         options = model.state_variables,
@@ -118,7 +167,14 @@ def phase_plane_interactive(model, integrator):
         options=list(range(model.number_of_modes)),
         value=0,
         description='Mode'
-    )   
+    ) 
+    
+
+    param_kwargs['trajectory'] = ToggleButton(
+        value=False,
+        description='Show trajectory'
+    )
+    
     
     w = interact(plot_phase_plane, **param_kwargs)
     return w
