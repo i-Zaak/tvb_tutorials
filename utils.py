@@ -27,3 +27,12 @@ def plot_connectivity(conn):
     fig.tight_layout()
 
     plt.show()
+
+def generate_initial_conditions_array(conn, dt, model):
+    idelays = np.rint(conn.delays / dt).astype(numpy.int32)
+    horizon = idelays.max() + 1    
+    nvar = model.nvar
+    nnodes = conn.number_of_nodes
+    nmodes = model.number_of_modes
+
+    return np.zeros( (horizon, nvar, nnodes, nmodes) )    

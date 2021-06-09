@@ -158,7 +158,7 @@ def phase_plane_interactive(model, integrator):
             
     for svar, svar_range in model.state_variable_range.items():
         param_kwargs[svar] = FloatSlider(
-                min=svar_range[0], max=svar_range[1], value=svar_range.mean()
+                min=svar_range[0], max=svar_range[1], value=np.mean(svar_range)
         )
     
     param_kwargs['svx'] = Dropdown(
