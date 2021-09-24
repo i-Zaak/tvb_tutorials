@@ -28,37 +28,28 @@ def plot_connectivity(conn):
 
     plt.show()
 
-def generate_initial_conditions_array(conn, dt, model):
-    idelays = np.rint(conn.delays / dt).astype(numpy.int32)
+def _good_history_shape(conn, dt, model):
+    idelays = np.rint(conn.delays / dt).astype(np.int32)
     horizon = idelays.max() + 1    
     nvar = model.nvar
-    nnodes = conn.number_of_nodes
+    nnodes = conn.number_of_regions
     nmodes = model.number_of_modes
 
-    return np.zeros( (horizon, nvar, nnodes, nmodes) )    
+    return (horizon, nvar, nnodes, nmodes)
 
+def _generate_initial_conditions(svar_range, shape):
+    nt, nvar, nnode, nmode = shape
+    ic = np.empty(shape)
+    svr = svar_range
+    sv = list(svar_range.keys())
+    block = nt, nnode, nmode
+    for i, (lo, hi) in enumerate([svr[sv[i]] for i in range(nvar)]):
+        ic[:, i] = np.random.uniform(low=lo, high=hi, size=block)
+    return ic
 
-import anytree, logging, contextlib
-
-@contextlib.contextmanager
-def no_log(highest_level=logging.CRITICAL):
-    "Disable logging within context."
-    # https://gist.github.com/simon-weber/7853144
-    previous_level = logging.root.manager.disable
-    logging.disable(highest_level)
-    try:
-        yield
-    finally:
-        logging.disable(previous_level)
-
-        
-def region_select_props(atlas, roi_name):
-    "Select atlas region w/o logging, return centroid & is_cortical."
-    try:
-        with no_log():
-            atlas.select_region(roi_name)
-        props, = atlas.regionprops(bs.spaces.MNI_152_ICBM_2009C_NONLINEAR_ASYMMETRIC).values()
-        return props.centroid_mm, props.is_cortical
-    except (anytree.CountError, AttributeError) as exc:
-        print(f'skipping {roi_name}: {exc}')
-        return np.r_[0,0,0], False
+def initial_conditions(model, conn, dt, svar_range):
+    shape = _good_history_shape(conn, dt, model)
+    svar_range_full = model.state_variable_range.copy()
+    for key, val in svar_range.items():
+        svar_range_full[key] = val
+    return _generate_initial_conditions(svar_range_full, shape)

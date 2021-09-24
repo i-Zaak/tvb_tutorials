@@ -3,5 +3,3 @@ matplotlib
 wheel
 tvb-library
 ipywidgets
-nilearn
-siibra
